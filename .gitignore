@@ -32,3 +32,4 @@ desktop.ini
 
 # Instance folder for Flask (if used for sensitive config)
 instance/
+.vercel

@@ -1,45 +1,34 @@
 import os
 import requests
-import json
 from flask import Flask, render_template, request, jsonify
-from dotenv import load_dotenv
-
-load_dotenv() # Load environment variables from .env for local development
 
 app = Flask(__name__)
 
-CONFIG_FILE = 'config.json'
 SMARTLEAD_API_BASE_URL = "https://server.smartlead.ai/api/v1"
 USE_MOCK_API = True # Set to False to use actual Smartlead API
 
+# In-memory storage for configuration
+config_store = {
+    "campaign_ids": [],
+    "frequency": "180",  # Default to 3 hours
+    "api_key": ""  # API key will be provided through the UI
+}
+
 def load_app_config():
-    """Loads configuration from config.json."""
-    try:
-        with open(CONFIG_FILE, 'r') as f:
-            config = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        # If file not found or not valid JSON, return default config
-        config = {"api_key": "", "campaign_ids": [], "frequency": ""}
-    # Backward compatibility for old config with single campaign_id
-    if "campaign_id" in config and isinstance(config["campaign_id"], str):
-        if config["campaign_id"]:
-            config["campaign_ids"] = [config.pop("campaign_id")]
-        else:
-            config.pop("campaign_id") # remove empty string if present
-            if "campaign_ids" not in config: # ensure campaign_ids key exists
-                 config["campaign_ids"] = []
-    elif "campaign_id" in config and not config["campaign_id"]:
-        config.pop("campaign_id")
-        if "campaign_ids" not in config:
-            config["campaign_ids"] = []
-    if "campaign_ids" not in config: # Ensure campaign_ids exists even if campaign_id was never there
-        config["campaign_ids"] = []
-    return config
+    """Load configuration from in-memory store."""
+    return {
+        "api_key": config_store["api_key"],  
+        "campaign_ids": config_store["campaign_ids"],
+        "frequency": config_store["frequency"]
+    }
 
 def save_app_config(data):
-    """Saves configuration to config.json."""
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump(data, f, indent=4)
+    """Save configuration to in-memory store."""
+    # Only save campaign_ids, frequency and api_key
+    config_store["campaign_ids"] = data.get("campaign_ids", [])
+    config_store["frequency"] = data.get("frequency", "180")
+    config_store["api_key"] = data.get("api_key", "")
+    return True
 
 # --- Helper Functions (Smartlead API interactions) ---
 def get_campaign_analytics(api_key, campaign_id):
@@ -151,11 +140,7 @@ def get_config_route():
 @app.route('/api/save-config', methods=['POST'])
 def save_config_route():
     data = request.json
-    api_key = data.get('apiKey', "")
-    # Expect 'campaignIds' as a list from the frontend
-    campaign_ids = data.get('campaignIds', []) 
-    frequency = data.get('frequency', "")
-    save_app_config({"api_key": api_key, "campaign_ids": campaign_ids, "frequency": frequency})
+    save_app_config(data)
     return jsonify({"message": "Configuration saved successfully"})
 
 @app.route('/api/check-and-disable-manual', methods=['POST'])

@@ -204,12 +204,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const frequency = frequencyInput.value.trim();
 
         // Collect all campaign IDs
-        if (!campaignIdsContainer) {
-            console.error('CRITICAL: campaignIdsContainer is null when trying to save config!');
-            displayConfigStatus('Internal UI error. Please refresh and try again.', true);
-            saveConfigButton.disabled = false; // Re-enable button
-            return;
-        }
         const campaignIdInputs = campaignIdsContainer.querySelectorAll('.campaignIdInput');
         const campaignIds = Array.from(campaignIdInputs)
                                 .map(input => input.value.trim())
@@ -219,11 +213,6 @@ document.addEventListener('DOMContentLoaded', () => {
             displayConfigStatus('Smartlead API Key cannot be empty.', true);
             return;
         }
-        // Optional: Validate if at least one campaign ID is provided if you want to enforce it
-        // if (campaignIds.length === 0) {
-        //     displayConfigStatus('Please add at least one Smartlead Campaign ID.', true);
-        //     return;
-        // }
 
         saveConfigButton.disabled = true;
         displayConfigStatus('Saving...', false);
@@ -232,19 +221,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    apiKey: apiKey, 
-                    campaignIds: campaignIds, // Send as an array
+                    api_key: apiKey, 
+                    campaignIds: campaignIds, 
                     frequency: frequency 
                 })
             });
-            const result = await response.json();
-            if (response.ok) { 
-                displayConfigStatus(result.message || 'Configuration saved successfully!', false);
-                const newFrequency = parseInt(frequencyInput.value, 10); // Get current value from dropdown
-                startOrUpdateNextRunTimer(newFrequency); // Update timer with newly saved frequency
-            } else {
-                displayConfigStatus(result.message || result.error || 'Failed to save configuration.', true);
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    displayConfigStatus(`Error saving config: ${errorJson.message || errorJson.error || 'Unknown error'}`, true);
+                } catch {
+                    displayConfigStatus(`Error saving config: ${errorText}`, true);
+                }
+                return;
             }
+
+            const result = await response.json();
+            displayConfigStatus(result.message || 'Configuration saved successfully!', false);
+            const newFrequency = parseInt(frequencyInput.value, 10);
+            startOrUpdateNextRunTimer(newFrequency);
         } catch (error) {
             displayConfigStatus(`Network error saving config: ${error.message}`, true);
         }
@@ -254,8 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Run Diagnostics Logic ---
     runDiagnosticsButton.addEventListener('click', async () => {
         const apiKey = apiKeyInput.value.trim();
-        // Campaign IDs are now read from saved config by the backend
-
+        
         if (!apiKey) {
             clearLogs();
             displayLog('Diagnostics: API Key is required to run diagnostics.', true);
@@ -267,7 +263,6 @@ document.addEventListener('DOMContentLoaded', () => {
         runDiagnosticsButton.disabled = true;
 
         try {
-            // The backend will use the saved campaign IDs. Only API key is needed here.
             const response = await fetch('/api/check-and-disable-manual', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
