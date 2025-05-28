@@ -11,69 +11,46 @@
         <h1>Smartlead Campaign Monitor</h1>
 
         <div class="section">
-            <h2>Scheduled Task Configuration (Stored in Vercel KV)</h2>
-            <p><small>This configuration is used by the automated cron job.</small></p>
+            <h2>Configuration</h2>
             <div class="input-group">
-                <label for="storedApiKey">Smartlead API Key (for scheduled tasks):</label>
-                <input type="password" id="storedApiKey" name="storedApiKey">
+                <label for="apiKey">Smartlead API:</label>
+                <input type="password" id="apiKey" name="apiKey" placeholder="Enter your Smartlead API Key">
             </div>
             
             <div class="input-group">
-                <label for="newScheduledCampaignId">Add Campaign ID for Scheduled Tasks:</label>
-                <div style="display: flex;">
-                    <input type="text" id="newScheduledCampaignId" placeholder="Enter Campaign ID">
-                    <button id="addCampaignIdButton" style="margin-left: 10px; width: auto; padding: 10px 15px;">Add</button>
+                <label>Smartlead Campaign IDs:</label> <!-- Changed label -->
+                <div id="campaignIdsContainer">
+                    <!-- Campaign ID inputs will be dynamically added here by JavaScript -->
                 </div>
+                <button type="button" id="addCampaignIdButton" style="margin-top: 5px;">Add Campaign ID</button>
             </div>
 
-            <label>Campaign IDs for Scheduled Tasks:</label>
-            <ul id="scheduledCampaignsList" class="campaign-list"></ul>
+            <div class="input-group">
+                <label for="frequency">How often to run diagnostics:</label>
+                <select id="frequency" name="frequency">
+                    <option value="60">Every hour</option>
+                    <option value="180">Every 3 hours</option>
+                    <option value="720">Every 12 hours</option>
+                </select> 
+            </div>
+            <p id="nextRunTimerDisplay" style="margin-top: 5px; margin-bottom: 15px;">Next auto-run: (Not scheduled)</p>
             
-            <button id="saveConfigButton">Save Scheduled Configuration</button>
+            <button id="saveConfigButton">Save Configuration</button>
             <p id="configStatus" class="status-message"></p>
         </div>
 
         <hr class="separator">
 
         <div class="section">
-            <h2>Manual Check (One-time)</h2>
-            <p><small>Use this for a quick, one-time check without saving the details for scheduled tasks.</small></p>
-            <div class="input-group">
-                <label for="manualApiKey">Smartlead API Key (for manual check):</label>
-                <input type="password" id="manualApiKey" name="manualApiKey" required>
-            </div>
-            
-            <div class="input-group">
-                <label for="manualCampaignId">Campaign ID (for manual check):</label>
-                <input type="text" id="manualCampaignId" name="manualCampaignId" required>
-            </div>
-            
-            <button id="runManualCheckButton">Run Manual Check & Disable</button>
+            <h2>Run Diagnostics</h2>
+            <p><small>Uses the API Key and Campaign ID currently entered above (does not need to be saved first for this run).</small></p>
+            <button id="runDiagnosticsButton">Run Diagnostics Now</button>
         </div>
         
         <hr class="separator">
 
-        <div class="section">
-            <h2>Scheduling Cron Job (Vercel)</h2>
-             <div class="input-group">
-                <label for="schedule">Select Frequency:</label>
-                <select id="schedule">
-                    <option value="0 */5 * * *">Every 5 Minutes</option>
-                    <option value="0 * * * *" selected>Every Hour</option>
-                    <option value="0 0 * * *">Once a Day (Midnight UTC)</option>
-                    <option value="*/1 * * * *">Every 1 Minute (For Testing - Use with caution)</option>
-                </select>
-                <p><small>To enable scheduling, deploy to Vercel and configure Cron Jobs in <code>vercel.json</code> using the selected cron expression. The cron job will use the API Key and Campaign IDs saved in the 'Scheduled Task Configuration' section above.</small></p>
-                <div id="cronInfoOutput" class="info-output"></div>
-            </div>
-        </div>
-
-        <hr class="separator">
-
         <h2>Log Output:</h2>
-        <div id="logOutput" class="log-output">
-            <p>No activity yet.</p>
-        </div>
+        <pre id="logOutput" class="log-output">No activity yet.</pre>
     </div>
 
     <script src="{{ url_for('static', filename='script.js') }}"></script>

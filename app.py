@@ -1,223 +1,241 @@
 import os
 import requests
-import json # For Vercel KV list storage
+import json
 from flask import Flask, render_template, request, jsonify
 from dotenv import load_dotenv
-from vercel_kv import KV # Import Vercel KV
 
 load_dotenv() # Load environment variables from .env for local development
 
 app = Flask(__name__)
 
-# Initialize Vercel KV client
-# For local development, ensure Vercel KV environment variables are set (KV_URL, etc.)
-# or use a local Redis instance if vercel-kv supports it directly or via Vercel CLI dev.
-kv_client = KV()
-
+CONFIG_FILE = 'config.json'
 SMARTLEAD_API_BASE_URL = "https://server.smartlead.ai/api/v1"
-KV_API_KEY_NAME = "SMARTLEAD_API_KEY_CONFIG"
-KV_CAMPAIGN_IDS_NAME = "SMARTLEAD_CAMPAIGN_IDS_CONFIG"
+USE_MOCK_API = True # Set to False to use actual Smartlead API
+
+def load_app_config():
+    """Loads configuration from config.json."""
+    try:
+        with open(CONFIG_FILE, 'r') as f:
+            config = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        # If file not found or not valid JSON, return default config
+        config = {"api_key": "", "campaign_ids": [], "frequency": ""}
+    # Backward compatibility for old config with single campaign_id
+    if "campaign_id" in config and isinstance(config["campaign_id"], str):
+        if config["campaign_id"]:
+            config["campaign_ids"] = [config.pop("campaign_id")]
+        else:
+            config.pop("campaign_id") # remove empty string if present
+            if "campaign_ids" not in config: # ensure campaign_ids key exists
+                 config["campaign_ids"] = []
+    elif "campaign_id" in config and not config["campaign_id"]:
+        config.pop("campaign_id")
+        if "campaign_ids" not in config:
+            config["campaign_ids"] = []
+    if "campaign_ids" not in config: # Ensure campaign_ids exists even if campaign_id was never there
+        config["campaign_ids"] = []
+    return config
+
+def save_app_config(data):
+    """Saves configuration to config.json."""
+    with open(CONFIG_FILE, 'w') as f:
+        json.dump(data, f, indent=4)
 
 # --- Helper Functions (Smartlead API interactions) ---
 def get_campaign_analytics(api_key, campaign_id):
-    """Fetches campaign analytics (sent, replies)."""
+    if USE_MOCK_API:
+        print(f"MOCK: get_campaign_analytics called for campaign_id: {campaign_id}")
+        # Simulate a scenario that would trigger mailbox disabling
+        return 150, 0 # total_sent, total_replies
     url = f"{SMARTLEAD_API_BASE_URL}/campaigns/{campaign_id}/analytics?api_key={api_key}"
     try:
         response = requests.get(url)
-        response.raise_for_status()
+        response.raise_for_status() # Raises an HTTPError for bad responses (4XX or 5XX)
         data = response.json()
-        return {
-            "sent_count": int(data.get("sent_count", 0)),
-            "reply_count": int(data.get("reply_count", 0)),
-            "error": None
-        }
+        # Safely access keys with .get() to avoid KeyError if a key is missing
+        total_sent = data.get('sent_count', 0)
+        total_replies = data.get('reply_count', 0)
+        return total_sent, total_replies
     except requests.exceptions.RequestException as e:
-        return {"sent_count": 0, "reply_count": 0, "error": f"API Error (Analytics for {campaign_id}): {str(e)}"}
-    except ValueError:
-        return {"sent_count": 0, "reply_count": 0, "error": f"API Error (Analytics for {campaign_id}): Invalid JSON response"}
+        # Log the error or handle it as needed
+        print(f"Error fetching campaign analytics for {campaign_id}: {e}")
+        return 0, 0 # Return default values on error
+    except json.JSONDecodeError:
+        print(f"Error decoding JSON for campaign analytics {campaign_id}.")
+        return 0, 0
 
-def get_campaign_email_accounts(api_key, campaign_id):
-    """Fetches email accounts associated with a campaign."""
+def get_email_accounts_for_campaign(api_key, campaign_id):
+    if USE_MOCK_API:
+        print(f"MOCK: get_email_accounts_for_campaign called for campaign_id: {campaign_id}")
+        return [
+            {'id': 'mock_acc_001', 'email_address': f'leadgen1@{campaign_id}.example.com', 'mock_sent_count': 75, 'mock_reply_count': 0},
+            {'id': 'mock_acc_002', 'email_address': f'outreach2@{campaign_id}.example.com', 'mock_sent_count': 75, 'mock_reply_count': 0}
+        ]
     url = f"{SMARTLEAD_API_BASE_URL}/campaigns/{campaign_id}/email-accounts?api_key={api_key}"
     try:
         response = requests.get(url)
         response.raise_for_status()
-        return response.json(), None
+        return response.json() # Returns a list of email account objects
     except requests.exceptions.RequestException as e:
-        return None, f"API Error (Get Accounts for {campaign_id}): {str(e)}"
-    except ValueError:
-        return None, f"API Error (Get Accounts for {campaign_id}): Invalid JSON response"
+        print(f"Error fetching email accounts for campaign {campaign_id}: {e}")
+        return []
+    except json.JSONDecodeError:
+        print(f"Error decoding JSON for email accounts {campaign_id}.")
+        return []
 
-def disable_email_account(api_key, email_account_id, campaign_id_context):
-    """Sets max_email_per_day to 0 for an email account."""
+def disable_email_account(api_key, email_account_id):
+    if USE_MOCK_API:
+        print(f"MOCK: disable_email_account called for email_account_id: {email_account_id}")
+        return True, {'message': f'Mock: Stopped sending new emails for account {email_account_id}.'}
     url = f"{SMARTLEAD_API_BASE_URL}/email-accounts/{email_account_id}?api_key={api_key}"
     payload = {"max_email_per_day": 0}
     try:
         response = requests.post(url, json=payload)
         response.raise_for_status()
-        return response.json().get("ok", False), None
+        return True, response.json()
     except requests.exceptions.RequestException as e:
-        return False, f"API Error (Disable Account {email_account_id} for campaign {campaign_id_context}): {str(e)}"
-    except ValueError:
-        return False, f"API Error (Disable Account {email_account_id} for campaign {campaign_id_context}): Invalid JSON response"
+        print(f"Error disabling email account {email_account_id}: {e}")
+        error_message = str(e)
+        # Try to get more specific error from response if available
+        if response is not None and response.content:
+            try:
+                error_details = response.json()
+                error_message = error_details.get('message', error_message)
+            except json.JSONDecodeError:
+                pass # Keep original error if JSON parsing fails
+        return False, {"message": error_message}
+    except json.JSONDecodeError:
+        print(f"Error decoding JSON for disabling email account {email_account_id}.")
+        return False, {"message": "JSON decode error"}
 
 def process_campaign_check(api_key, campaign_id):
-    logs = []
-    analytics = get_campaign_analytics(api_key, campaign_id)
-    if analytics["error"]:
-        logs.append(f"Campaign {campaign_id}: Error fetching analytics: {analytics['error']}")
-        return logs, 0, 0 # Return early if analytics fails for this campaign
+    logs = []    
+    total_sent_for_campaign, total_replies_for_campaign = get_campaign_analytics(api_key, campaign_id)
+    logs.append(f"Campaign {campaign_id}: Total Sent = {total_sent_for_campaign}, Total Replies = {total_replies_for_campaign}")
 
-    sent_count = analytics["sent_count"]
-    reply_count = analytics["reply_count"]
-    logs.append(f"Campaign {campaign_id} - Total Sent: {sent_count}, Total Replies: {reply_count}")
-
-    # Condition: >= 100 emails sent AND <= 1 reply
-    # IMPORTANT: Change to sent_count >= 100 for production.
-    if sent_count >= 1 and reply_count <= 1: # Using 1 for easier testing.
-        logs.append(f"Campaign {campaign_id}: Condition met (Sent >= 1, Replies <= 1). Attempting to disable mailboxes.")
-        email_accounts, error = get_campaign_email_accounts(api_key, campaign_id)
-        if error:
-            logs.append(f"Campaign {campaign_id}: Error fetching email accounts: {error}")
-        elif email_accounts:
-            if not isinstance(email_accounts, list):
-                logs.append(f"Campaign {campaign_id}: Expected a list of email accounts, got {type(email_accounts)}")
-            else:
-                for account in email_accounts:
-                    acc_id = account.get("id")
-                    acc_email = account.get("from_email", f"Unknown Email (ID: {acc_id})")
-                    if acc_id:
-                        success, disable_error = disable_email_account(api_key, acc_id, campaign_id)
-                        if success:
-                            logs.append(f"Campaign {campaign_id}: Successfully disabled mailbox: {acc_email} (ID: {acc_id})")
-                        else:
-                            logs.append(f"Campaign {campaign_id}: Failed to disable mailbox {acc_email} (ID: {acc_id}): {disable_error}")
-                    else:
-                        logs.append(f"Campaign {campaign_id}: Could not find ID for an email account: {account.get('from_email', 'Unknown')}")
+    # Using 1 for sent_count for easier testing. Change to 100 for production.
+    if total_sent_for_campaign >= 1 and total_replies_for_campaign == 0:
+        logs.append(f"Condition met for Campaign {campaign_id}: Sent >= 1 (test) and Replies == 0. Attempting to stop sending new emails from mailboxes.")
+        email_accounts = get_email_accounts_for_campaign(api_key, campaign_id)
+        if not email_accounts:
+            logs.append(f"No email accounts found or error fetching for campaign {campaign_id}.")
         else:
-            logs.append(f"Campaign {campaign_id}: No email accounts found or an error occurred while fetching them.")
+            for account in email_accounts:
+                account_id = account.get('id')
+                account_email = account.get('email_address', 'N/A')
+                mock_sent = account.get('mock_sent_count', 'N/A') # Get mock sent count
+                mock_replies = account.get('mock_reply_count', 'N/A') # Get mock reply count
+                if account_id:
+                    success, response_data = disable_email_account(api_key, account_id)
+                    if success:
+                        logs.append(f"Mailbox: {account_email}, Mock Sent: {mock_sent}, Mock Replies: {mock_replies} - {response_data.get('message', 'OK').replace('disabled', 'stopped sending new emails').replace('Email account', 'account')}")
+                    else:
+                        logs.append(f"Failed to stop sending new emails from mailbox ID: {account_id} ({account_email}), Mock Sent: {mock_sent}, Mock Replies: {mock_replies}. Error: {response_data.get('message', 'Unknown error')}")
+                else:
+                    logs.append(f"Could not disable mailbox, ID missing for account: {account_email}")
     else:
-        logs.append(f"Campaign {campaign_id}: Condition not met for disabling mailboxes (Sent: {sent_count}, Replies: {reply_count}).")
+        logs.append(f"Condition not met for Campaign {campaign_id}. No action taken.")
     
-    return logs, sent_count, reply_count
+    return logs, total_sent_for_campaign, total_replies_for_campaign
 
 # --- Flask Routes ---
 @app.route('/')
 def index():
     return render_template('index.html')
 
+@app.route('/api/get-config', methods=['GET'])
+def get_config_route():
+    config = load_app_config()
+    return jsonify(config)
+
 @app.route('/api/save-config', methods=['POST'])
 def save_config_route():
     data = request.json
-    api_key = data.get('apiKey')
-    campaign_ids = data.get('campaignIds') # Expected to be a list of strings
-
-    if not api_key or campaign_ids is None: # campaign_ids can be an empty list
-        return jsonify({'status': 'error', 'message': 'API Key and Campaign IDs list are required.'}), 400
-    if not isinstance(campaign_ids, list):
-        return jsonify({'status': 'error', 'message': 'Campaign IDs must be a list.'}), 400
-
-    try:
-        kv_client.set(KV_API_KEY_NAME, api_key)
-        kv_client.set(KV_CAMPAIGN_IDS_NAME, json.dumps(campaign_ids)) # Store list as JSON string
-        return jsonify({'status': 'success', 'message': 'Configuration saved.'})
-    except Exception as e:
-        app.logger.error(f"Error saving to Vercel KV: {e}")
-        return jsonify({'status': 'error', 'message': f'Failed to save configuration: {str(e)}'}), 500
-
-@app.route('/api/get-config', methods=['GET'])
-def get_config_route():
-    try:
-        api_key = kv_client.get(KV_API_KEY_NAME)
-        campaign_ids_json = kv_client.get(KV_CAMPAIGN_IDS_NAME)
-        
-        campaign_ids = []
-        if campaign_ids_json:
-            campaign_ids = json.loads(campaign_ids_json) # Parse JSON string to list
-            if not isinstance(campaign_ids, list):
-                # Handle case where stored data is not a list (e.g. old format or corruption)
-                app.logger.warning(f"Corrupted campaign_ids in KV: {campaign_ids_json}, resetting to empty list.")
-                campaign_ids = []
-                kv_client.set(KV_CAMPAIGN_IDS_NAME, json.dumps([])) # Fix it in KV
-
-        return jsonify({
-            'apiKey': api_key,
-            'campaignIds': campaign_ids
-        })
-    except Exception as e:
-        app.logger.error(f"Error reading from Vercel KV: {e}")
-        # Return empty/default config on error to allow UI to function
-        return jsonify({'apiKey': '', 'campaignIds': [], 'error': f'Failed to load configuration: {str(e)}'}), 500
+    api_key = data.get('apiKey', "")
+    # Expect 'campaignIds' as a list from the frontend
+    campaign_ids = data.get('campaignIds', []) 
+    frequency = data.get('frequency', "")
+    save_app_config({"api_key": api_key, "campaign_ids": campaign_ids, "frequency": frequency})
+    return jsonify({"message": "Configuration saved successfully"})
 
 @app.route('/api/check-and-disable-manual', methods=['POST'])
-def check_and_disable_manual_route(): # Renamed to avoid confusion
+def check_and_disable_manual_route():
     data = request.json
-    api_key = data.get('apiKey')
-    campaign_id = data.get('campaignId')
+    api_key = data.get('apiKey') # API key still comes from the current input on the page
+    
+    config = load_app_config() # Load saved config to get campaign IDs
+    campaign_ids = config.get('campaign_ids', [])
 
-    if not api_key or not campaign_id:
-        return jsonify({'logs': ['API Key and Campaign ID are required for manual check.'], 'sent': 0, 'replies': 0}), 400
+    if not api_key:
+        return jsonify({'error': 'API Key is required.'}), 400
+    if not campaign_ids:
+        return jsonify({'error': 'No Campaign IDs configured. Please save configuration first.'}), 400
 
-    logs, sent, replies = process_campaign_check(api_key, str(campaign_id)) # Ensure campaign_id is string
-    return jsonify({'logs': logs, 'sent_total_for_campaign': sent, 'replies_total_for_campaign': replies})
-
-@app.route('/api/trigger-check-scheduled', methods=['POST']) # For Vercel Cron
-def trigger_check_scheduled_route():
-    # Security: In a real Vercel environment, you might add a secret header check if desired.
-    # This endpoint is intended to be called by Vercel's internal cron system.
     all_logs = []
-    total_sent_across_campaigns = 0
-    total_replies_across_campaigns = 0
+    total_sent_overall = 0
+    total_replies_overall = 0
     processed_campaign_count = 0
 
-    try:
-        api_key = kv_client.get(KV_API_KEY_NAME)
-        campaign_ids_json = kv_client.get(KV_CAMPAIGN_IDS_NAME)
+    for campaign_id in campaign_ids:
+        if not campaign_id.strip(): # Skip empty campaign IDs
+            continue
+        all_logs.append(f"--- Processing Campaign ID: {campaign_id} ---")
+        logs, sent, replies = process_campaign_check(api_key, str(campaign_id))
+        all_logs.extend(logs)
+        total_sent_overall += sent
+        total_replies_overall += replies
+        processed_campaign_count += 1
+        all_logs.append("--- End of Campaign ID: " + str(campaign_id) + " ---")
 
-        if not api_key:
-            log_message = "Scheduled task: SMARTLEAD_API_KEY not found in Vercel KV configuration."
-            print(log_message)
-            all_logs.append(log_message)
-            return jsonify({'status': 'error', 'message': log_message, 'logs': all_logs}), 400
-        
-        campaign_ids = []
-        if campaign_ids_json:
-            campaign_ids = json.loads(campaign_ids_json)
-        
-        if not campaign_ids:
-            log_message = "Scheduled task: No campaign IDs found in Vercel KV configuration."
-            print(log_message)
-            all_logs.append(log_message)
-            return jsonify({'status': 'info', 'message': log_message, 'logs': all_logs})
+    if processed_campaign_count == 0:
+        return jsonify({'logs': ['No valid campaign IDs found to process.'], 'processed_campaigns': 0}), 200
 
-        all_logs.append(f"Scheduled task started for {len(campaign_ids)} campaign(s).")
-        for campaign_id in campaign_ids:
-            campaign_id_str = str(campaign_id) # Ensure it's a string
-            logs, sent, replies = process_campaign_check(api_key, campaign_id_str)
-            all_logs.extend(logs)
-            total_sent_across_campaigns += sent
-            total_replies_across_campaigns += replies
-            processed_campaign_count +=1
-            all_logs.append("---") # Separator between campaign logs
+    return jsonify({'logs': all_logs, 'processed_campaigns': processed_campaign_count, 'sent_total_overall': total_sent_overall, 'replies_total_overall': total_replies_overall})
 
-        summary_log = f"Scheduled task finished. Processed {processed_campaign_count} campaign(s). Total sent across checked campaigns: {total_sent_across_campaigns}, Total replies: {total_replies_across_campaigns}."
-        all_logs.append(summary_log)
-        print(summary_log)
-        # Print all individual logs for Vercel function logs
-        for log_entry in all_logs:
-            print(log_entry)
-        
-        return jsonify({'status': 'success', 'logs': all_logs, 'processed_campaigns': processed_campaign_count})
+@app.route('/api/trigger-check-scheduled', methods=['GET', 'POST'])
+def trigger_check_scheduled_route():
+    config = load_app_config()
+    api_key = config.get('api_key')
+    campaign_ids = config.get('campaign_ids', []) # Expect a list of campaign IDs
 
-    except Exception as e:
-        error_log = f"Scheduled task error: {str(e)}"
-        app.logger.error(error_log)
-        print(error_log)
-        all_logs.append(error_log)
-        return jsonify({'status': 'error', 'message': error_log, 'logs': all_logs}), 500
+    if not api_key:
+        print("Scheduled Check: API key not configured.")
+        return jsonify({"error": "API key not configured for scheduled checks."}), 400
+    
+    if not campaign_ids:
+        print("Scheduled Check: No campaign IDs configured.")
+        return jsonify({"message": "No campaign IDs configured for scheduled checks."}), 200
+
+    all_logs = []
+    total_sent_overall = 0
+    total_replies_overall = 0
+    processed_campaign_count = 0
+    
+    all_logs.append(f"Scheduled task started for {len(campaign_ids)} configured campaign(s).")
+    print(f"Scheduled task started for {len(campaign_ids)} configured campaign(s).")
+
+    for campaign_id in campaign_ids:
+        if not str(campaign_id).strip(): # Skip empty or whitespace-only campaign IDs
+            all_logs.append(f"Skipping empty campaign ID entry.")
+            continue
+        campaign_id_str = str(campaign_id).strip()
+        all_logs.append(f"--- Processing Campaign ID: {campaign_id_str} ---")
+        print(f"--- Processing Campaign ID: {campaign_id_str} ---")
+        logs, sent, replies = process_campaign_check(api_key, campaign_id_str)
+        all_logs.extend(logs)
+        total_sent_overall += sent
+        total_replies_overall += replies
+        processed_campaign_count +=1
+        all_logs.append(f"--- End of Campaign ID: {campaign_id_str} ---")
+
+    summary_log = f"Scheduled task finished. Processed {processed_campaign_count} campaign(s). Total sent overall: {total_sent_overall}, Total replies overall: {total_replies_overall}."
+    all_logs.append(summary_log)
+    print(summary_log) # For local console logging
+    
+    return jsonify({'status': 'success', 'logs': all_logs, 'processed_campaigns': processed_campaign_count, 'sent_total_overall': total_sent_overall, 'replies_total_overall': total_replies_overall})
 
 if __name__ == '__main__':
-    # For local testing, ensure Vercel KV env vars are set or use a local Redis.
-    # Example: export KV_URL="redis://localhost:6379"
-    app.run(debug=True)
-
+    # For local testing. 
+    # The .env file will be loaded by load_dotenv() if it exists.
+    # No Vercel KV specific env vars needed for this local setup.
+    app.run(debug=True, port=5000)
