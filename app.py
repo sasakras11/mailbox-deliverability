@@ -1,33 +1,33 @@
 import os
 import requests
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, session
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24)  # Required for session
 
 SMARTLEAD_API_BASE_URL = "https://server.smartlead.ai/api/v1"
 USE_MOCK_API = True # Set to False to use actual Smartlead API
 
-# In-memory storage for configuration
-config_store = {
-    "campaign_ids": [],
-    "frequency": "180",  # Default to 3 hours
-    "api_key": ""  # API key will be provided through the UI
-}
+CONFIG_KEY = 'smartlead_config'
 
 def load_app_config():
-    """Load configuration from in-memory store."""
-    return {
-        "api_key": config_store["api_key"],  
-        "campaign_ids": config_store["campaign_ids"],
-        "frequency": config_store["frequency"]
-    }
+    """Load configuration from session."""
+    config = session.get(CONFIG_KEY, {
+        "api_key": "",
+        "campaign_ids": [],
+        "frequency": "180"
+    })
+    return config
+
 
 def save_app_config(data):
-    """Save configuration to in-memory store."""
-    # Only save campaign_ids, frequency and api_key
-    config_store["campaign_ids"] = data.get("campaign_ids", [])
-    config_store["frequency"] = data.get("frequency", "180")
-    config_store["api_key"] = data.get("api_key", "")
+    """Save configuration to session."""
+    config = {
+        "api_key": data.get("api_key", ""),
+        "campaign_ids": data.get("campaign_ids", []),
+        "frequency": data.get("frequency", "180")
+    }
+    session[CONFIG_KEY] = config
     return True
 
 # --- Helper Functions (Smartlead API interactions) ---

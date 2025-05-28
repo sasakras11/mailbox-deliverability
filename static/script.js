@@ -222,7 +222,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     api_key: apiKey, 
-                    campaignIds: campaignIds, 
+                    campaign_ids: campaignIds, 
                     frequency: frequency 
                 })
             });
