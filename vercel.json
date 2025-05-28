@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "app.py",
+      "use": "@vercel/python",
+      "config": { "maxLambdaSize": "15mb", "runtime": "python3.9" }
+    }
+  ],
+  "routes": [
+    { "src": "/static/(.*)", "dest": "/static/$1" },
+    { "src": "/(.*)", "dest": "app.py" }
+  ],
+  "crons": [
+    // Example: To run the check every hour for the campaign ID and API key
+    // set in your Vercel project's environment variables.
+    // Replace with your desired schedule from the UI dropdown.
+    // {
+    //   "path": "/api/trigger-check-scheduled",
+    //   "schedule": "0 * * * *" // This means "at minute 0 past every hour"
+    // }
+    // 
+    // Example for every 5 minutes (ensure your Smartlead plan/API limits allow this frequency):
+    // {
+    //   "path": "/api/trigger-check-scheduled",
+    //   "schedule": "*/5 * * * *"
+    // }
+  ]
+}

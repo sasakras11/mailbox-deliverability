@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smartlead Campaign Monitor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Smartlead Campaign Monitor</h1>
+
+        <div class="section">
+            <h2>Scheduled Task Configuration (Stored in Vercel KV)</h2>
+            <p><small>This configuration is used by the automated cron job.</small></p>
+            <div class="input-group">
+                <label for="storedApiKey">Smartlead API Key (for scheduled tasks):</label>
+                <input type="password" id="storedApiKey" name="storedApiKey">
+            </div>
+            
+            <div class="input-group">
+                <label for="newScheduledCampaignId">Add Campaign ID for Scheduled Tasks:</label>
+                <div style="display: flex;">
+                    <input type="text" id="newScheduledCampaignId" placeholder="Enter Campaign ID">
+                    <button id="addCampaignIdButton" style="margin-left: 10px; width: auto; padding: 10px 15px;">Add</button>
+                </div>
+            </div>
+
+            <label>Campaign IDs for Scheduled Tasks:</label>
+            <ul id="scheduledCampaignsList" class="campaign-list"></ul>
+            
+            <button id="saveConfigButton">Save Scheduled Configuration</button>
+            <p id="configStatus" class="status-message"></p>
+        </div>
+
+        <hr class="separator">
+
+        <div class="section">
+            <h2>Manual Check (One-time)</h2>
+            <p><small>Use this for a quick, one-time check without saving the details for scheduled tasks.</small></p>
+            <div class="input-group">
+                <label for="manualApiKey">Smartlead API Key (for manual check):</label>
+                <input type="password" id="manualApiKey" name="manualApiKey" required>
+            </div>
+            
+            <div class="input-group">
+                <label for="manualCampaignId">Campaign ID (for manual check):</label>
+                <input type="text" id="manualCampaignId" name="manualCampaignId" required>
+            </div>
+            
+            <button id="runManualCheckButton">Run Manual Check & Disable</button>
+        </div>
+        
+        <hr class="separator">
+
+        <div class="section">
+            <h2>Scheduling Cron Job (Vercel)</h2>
+             <div class="input-group">
+                <label for="schedule">Select Frequency:</label>
+                <select id="schedule">
+                    <option value="0 */5 * * *">Every 5 Minutes</option>
+                    <option value="0 * * * *" selected>Every Hour</option>
+                    <option value="0 0 * * *">Once a Day (Midnight UTC)</option>
+                    <option value="*/1 * * * *">Every 1 Minute (For Testing - Use with caution)</option>
+                </select>
+                <p><small>To enable scheduling, deploy to Vercel and configure Cron Jobs in <code>vercel.json</code> using the selected cron expression. The cron job will use the API Key and Campaign IDs saved in the 'Scheduled Task Configuration' section above.</small></p>
+                <div id="cronInfoOutput" class="info-output"></div>
+            </div>
+        </div>
+
+        <hr class="separator">
+
+        <h2>Log Output:</h2>
+        <div id="logOutput" class="log-output">
+            <p>No activity yet.</p>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

@@ -1,0 +1,188 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f4f6f8;
+    color: #333;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+}
+
+.container {
+    background-color: #fff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    width: 100%;
+    max-width: 600px;
+}
+
+.section {
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+}
+
+.separator {
+    border: 0;
+    height: 1px;
+    background-color: #e0e0e0;
+    margin: 30px 0;
+}
+
+h1 {
+    color: #2c3e50;
+    text-align: center;
+    margin-bottom: 25px;
+}
+
+.input-group {
+    margin-bottom: 20px;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #555;
+}
+
+.input-group input[type="text"],
+.input-group input[type="password"],
+.input-group select {
+    width: calc(100% - 22px); /* Account for padding and border */
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+}
+
+button {
+    background-color: #3498db;
+    color: white;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 600;
+    display: block;
+    width: 100%;
+    margin-top: 10px; /* Added margin top for buttons not in flex */
+    margin-bottom: 10px; /* Adjusted margin bottom */
+    transition: background-color 0.3s ease;
+}
+
+button:hover {
+    background-color: #2980b9;
+}
+
+button:disabled {
+    background-color: #bdc3c7;
+    cursor: not-allowed;
+}
+
+h2 {
+    margin-top: 20px; /* Adjusted margin top */
+    margin-bottom: 15px; /* Adjusted margin bottom */
+    color: #333;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px; /* Adjusted padding */
+}
+
+.log-output {
+    background-color: #2c3e50; /* Dark background for terminal look */
+    color: #ecf0f1; /* Light text */
+    padding: 15px;
+    border-radius: 4px;
+    min-height: 100px;
+    max-height: 300px;
+    overflow-y: auto;
+    font-family: "Menlo", "Consolas", monospace;
+    font-size: 14px;
+    line-height: 1.6;
+    margin-top: 10px;
+}
+
+.log-output p {
+    margin: 0 0 5px 0;
+    word-wrap: break-word;
+}
+
+.log-output p:last-child {
+    margin-bottom: 0;
+}
+
+.info-output {
+    background-color: #eaf6ff;
+    color: #34495e;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    margin-top: 10px;
+}
+
+pre {
+    background-color: #f0f0f0;
+    border: 1px solid #ddd;
+    padding: 10px;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-size: 13px;
+    color: #333;
+}
+
+small {
+    font-size: 0.85em;
+    color: #777;
+    display: block; /* Make small take its own line if needed */
+    margin-top: 5px;
+}
+
+/* Styles for Campaign ID list */
+.campaign-list {
+    list-style-type: none;
+    padding: 0;
+    margin-bottom: 15px;
+    max-height: 150px;
+    overflow-y: auto;
+    border: 1px solid #eee;
+    border-radius: 4px;
+}
+
+.campaign-list li {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.campaign-list li:last-child {
+    border-bottom: none;
+}
+
+.remove-btn {
+    background-color: #e74c3c;
+    color: white;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.8em;
+    margin-left: 10px;
+    width: auto; /* Override full width for this button */
+}
+
+.remove-btn:hover {
+    background-color: #c0392b;
+}
+
+.status-message {
+    font-size: 0.9em;
+    margin-top: 10px;
+    padding: 8px;
+    border-radius: 4px;
+    text-align: center;
+}
